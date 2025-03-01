@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruby.wasm タイピングゲーム</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background: linear-gradient(135deg, #FFC8CE, #92E9FB);
+            padding: 20px;
+            min-height: 100vh;
+            margin: 0;
+        }
+        #game-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #word-display {
+            font-size: 2em;
+            margin: 20px 0;
+            min-height: 1.5em;
+        }
+        #current-word {
+            color: #333;
+        }
+        #image-display {
+            margin: 20px auto;
+            height: 200px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #image-display img {
+            max-height: 100%;
+            max-width: 100%;
+            border-radius: 8px;
+        }
+        #input-area {
+            margin-bottom: 20px;
+        }
+        #word-input {
+            font-size: 1.2em;
+            padding: 8px;
+            width: 60%;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+        }
+        #stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background-color: #e6f7ff;
+            padding: 10px;
+            border-radius: 5px;
+            width: 25%;
+        }
+        #start-btn {
+            background-color: #002E4E;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #start-btn:hover {
+            background-color: #004b7d;
+        }
+        .correct {
+            color: green;
+        }
+        .incorrect {
+            color: red;
+            text-decoration: line-through;
+        }
+        .highlight {
+            background-color: yellow;
+        }
+        .typed {
+            color: #888;
+        }
+        #loading {
+            margin: 20px 0;
+            font-style: italic;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <h1>Ruby.wasm タイピングゲーム</h1>
+        <div id="loading">Ruby.wasmをロード中...</div>
+        <div id="word-display">
+            <span id="current-word"></span>
+        </div>
+        <div id="image-display">
+            <!-- 画像がここに表示されます -->
+        </div>
+        <div id="input-area">
+            <input type="text" id="word-input" placeholder="ここにタイプ" disabled>
+        </div>
+        <div id="stats">
+            <div class="stat-box">
+                <h3>スコア</h3>
+                <p id="score">0</p>
+            </div>
+            <div class="stat-box">
+                <h3>時間</h3>
+                <p id="time">60</p>
+            </div>
+            <div class="stat-box">
+                <h3>WPM</h3>
+                <p id="wpm">0</p>
+            </div>
+        </div>
+        <button id="start-btn" disabled>ゲーム開始</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@ruby/wasm-wasi@2.0.0/dist/browser.script.iife.js"></script>
+    <script>
+        // Ruby.wasmの初期化
+        const initRuby = async () => {
+            try {
+                const { DefaultRubyVM } = window["ruby-wasm-wasi"];
+                const response = await fetch("https://cdn.jsdelivr.net/npm/@ruby/wasm-wasi@2.0.0/dist/ruby.wasm");
+                const buffer = await response.arrayBuffer();
+                const module = await WebAssembly.compile(buffer);
+                const { vm } = await DefaultRubyVM(module);
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('start-btn').disabled = false;
+                
+                // Rubyのワードリスト生成関数
+                vm.eval(`
+                    def generate_word_list
+                        words = %w(
+                            Ruby STORES tanoshii yatta- justforfun sutomaru 
+                            pos cashless netshop omise manekineko okyakusann 
+                            irasshaimase arigatou seruhureji kaiten heiten 
+                            noren mobairuo-da- chuushoukigyou
+                        )
+                        words.to_json
+                    end
+                `);
+                
+                return vm;
+            } catch (error) {
+                console.error('Ruby.wasmの初期化に失敗しました:', error);
+                document.getElementById('loading').textContent = 'Ruby.wasmのロードに失敗しました。';
+            }
+        };
+
+        let rubyVM;
+        let words = [];
+        let currentWord = '';
+        let score = 0;
+        let timeLeft = 60;
+        let timer;
+        let totalTyped = 0;
+        let gameActive = false;
+        
+        // キーワードに対応する画像のURLマップ
+        const wordImageMap = {
+            'Ruby': '/api/placeholder/300/200?text=Ruby',
+            'STORES': '/api/placeholder/300/200?text=STORES',
+            'tanoshii': '/api/placeholder/300/200?text=たのしい',
+            'yatta-': '/api/placeholder/300/200?text=やったー',
+            'justforfun': '/api/placeholder/300/200?text=Just+For+Fun',
+            'sutomaru': '/api/placeholder/300/200?text=ストマル',
+            'pos': '/api/placeholder/300/200?text=POS',
+            'cashless': '/api/placeholder/300/200?text=キャッシュレス',
+            'netshop': '/api/placeholder/300/200?text=ネットショップ',
+            'omise': '/api/placeholder/300/200?text=お店',
+            'manekineko': '/api/placeholder/300/200?text=招き猫',
+            'okyakusann': '/api/placeholder/300/200?text=お客さん',
+            'irasshaimase': '/api/placeholder/300/200?text=いらっしゃいませ',
+            'arigatou': '/api/placeholder/300/200?text=ありがとう',
+            'seruhureji': '/api/placeholder/300/200?text=セルフレジ',
+            'kaiten': '/api/placeholder/300/200?text=開店',
+            'heiten': '/api/placeholder/300/200?text=閉店',
+            'noren': '/api/placeholder/300/200?text=のれん',
+            'mobairuo-da-': '/api/placeholder/300/200?text=モバイルオーダー',
+            'chuushoukigyou': '/api/placeholder/300/200?text=中小企業'
+        };
+
+        window.onload = async () => {
+            rubyVM = await initRuby();
+            
+            const startBtn = document.getElementById('start-btn');
+            const wordInput = document.getElementById('word-input');
+            
+            startBtn.addEventListener('click', startGame);
+            wordInput.addEventListener('input', checkInput);
+        };
+
+        function startGame() {
+            if (gameActive) {
+                // リセットボタンとして機能
+                clearInterval(timer);
+                gameActive = false;
+                document.getElementById('word-input').disabled = true;
+                document.getElementById('start-btn').textContent = 'ゲーム開始';
+                document.getElementById('current-word').textContent = '';
+                document.getElementById('image-display').innerHTML = '';
+                return;
+            }
+            
+            // Rubyでワードリストを生成
+            const wordListJSON = rubyVM.eval('generate_word_list');
+            words = JSON.parse(wordListJSON);
+            
+            // ワードリストをシャッフル
+            words = shuffleArray(words);
+            
+            score = 0;
+            timeLeft = 60;
+            totalTyped = 0;
+            gameActive = true;
+            
+            document.getElementById('score').textContent = score;
+            document.getElementById('time').textContent = timeLeft;
+            document.getElementById('wpm').textContent = '0';
+            document.getElementById('word-input').value = '';
+            document.getElementById('word-input').disabled = false;
+            document.getElementById('word-input').focus();
+            document.getElementById('start-btn').textContent = 'リセット';
+            
+            // 最初の単語を表示
+            nextWord();
+            
+            // タイマー開始
+            timer = setInterval(() => {
+                timeLeft--;
+                document.getElementById('time').textContent = timeLeft;
+                
+                // WPMの計算 (1分間に打った単語数)
+                const minutes = (60 - timeLeft) / 60;
+                if (minutes > 0) {
+                    const wpm = Math.round(totalTyped / 5 / minutes); // 5文字を1語として計算
+                    document.getElementById('wpm').textContent = wpm;
+                }
+                
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function nextWord() {
+            if (words.length === 0) {
+                // すべての単語を使い切った場合は再生成
+                const wordListJSON = rubyVM.eval('generate_word_list');
+                words = JSON.parse(wordListJSON);
+                words = shuffleArray(words);
+            }
+            
+            currentWord = words.pop();
+            document.getElementById('current-word').textContent = currentWord;
+            
+            // 対応する画像を表示
+            const imageUrl = wordImageMap[currentWord] || '/api/placeholder/300/200?text=No+Image';
+            document.getElementById('image-display').innerHTML = `<img src="${imageUrl}" alt="${currentWord}">`;
+        }
+
+        function checkInput(e) {
+            const userInput = e.target.value;
+            
+            if (userInput === currentWord) {
+                score++;
+                totalTyped += currentWord.length;
+                document.getElementById('score').textContent = score;
+                e.target.value = '';
+                nextWord();
+            } else {
+                // 入力中の文字をリアルタイムで色付け
+                const currentWordElem = document.getElementById('current-word');
+                let html = '';
+                
+                for (let i = 0; i < currentWord.length; i++) {
+                    if (i < userInput.length) {
+                        if (userInput[i] === currentWord[i]) {
+                            html += `<span class="correct">${currentWord[i]}</span>`;
+                        } else {
+                            html += `<span class="incorrect">${currentWord[i]}</span>`;
+                        }
+                    } else if (i === userInput.length) {
+                        html += `<span class="highlight">${currentWord[i]}</span>`;
+                    } else {
+                        html += currentWord[i];
+                    }
+                }
+                
+                currentWordElem.innerHTML = html;
+            }
+        }
+
+        function endGame() {
+            clearInterval(timer);
+            gameActive = false;
+            
+            document.getElementById('word-input').disabled = true;
+            document.getElementById('start-btn').textContent = 'ゲーム開始';
+            
+            // Rubyでゲーム結果を評価
+            const resultScript = `
+                score = ${score}
+                wpm = ${document.getElementById('wpm').textContent}
+                
+                if score > 15
+                  "素晴らしい！#{score}ポイント獲得しました！"
+                elsif score > 10
+                  "良いスコアです！#{score}ポイント獲得しました！"
+                elsif score > 5
+                  "まずまずのスコアです。#{score}ポイント獲得しました。"
+                else
+                  "#{score}ポイント獲得しました。もう一度チャレンジしてみましょう！"
+                end
+            `;
+            
+            const message = rubyVM.eval(resultScript);
+            alert(`ゲーム終了！\nスコア: ${score}\nWPM: ${document.getElementById('wpm').textContent}\n\n${message}`);
+        }
+    </script>
+</body>
+</html>
