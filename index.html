@@ -13,13 +13,16 @@
             min-height: 100vh;
             margin: 0;
         }
-        #game-container {
+        #game-container, #result-container {
             max-width: 800px;
             margin: 0 auto;
             background-color: white;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #result-container {
+            display: none;
         }
         #word-display {
             font-size: 2.5em;
@@ -50,7 +53,7 @@
             border-radius: 5px;
             width: 25%;
         }
-        #start-btn {
+        .btn {
             background-color: #002E4E;
             color: white;
             border: none;
@@ -60,7 +63,7 @@
             border-radius: 5px;
             margin-top: 20px;
         }
-        #start-btn:hover {
+        .btn:hover {
             background-color: #004b7d;
         }
         .correct {
@@ -76,9 +79,55 @@
         .typed {
             color: #888;
         }
+        #result-message {
+            font-size: 1.8em;
+            margin: 20px 0;
+            color: #002E4E;
+        }
+        #result-stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+        }
+        .result-stat-box {
+            background-color: #e6f7ff;
+            padding: 15px;
+            border-radius: 8px;
+            width: 30%;
+        }
+        .result-stat-box h3 {
+            margin-top: 0;
+            color: #002E4E;
+        }
+        .result-stat-box .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #002E4E;
+        }
+        .result-stat-box .label {
+            font-size: 0.9em;
+            color: #666;
+        }
+        #share-section {
+            margin: 30px 0;
+            padding: 15px;
+            background-color: #f0f8ff;
+            border-radius: 8px;
+        }
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
     </style>
 </head>
 <body>
+    <canvas id="confetti-canvas"></canvas>
+    
     <div id="game-container">
         <h1>タイピングゲーム</h1>
         <div id="word-display">
@@ -101,7 +150,37 @@
                 <p id="wpm">0</p>
             </div>
         </div>
-        <button id="start-btn">ゲーム開始</button>
+        <button id="start-btn" class="btn">ゲーム開始</button>
+    </div>
+    
+    <div id="result-container">
+        <h1>ゲーム結果</h1>
+        <div id="result-message">素晴らしい！</div>
+        
+        <div id="result-stats">
+            <div class="result-stat-box">
+                <h3>スコア</h3>
+                <div class="value" id="final-score">0</div>
+                <div class="label">正確に入力した単語数</div>
+            </div>
+            <div class="result-stat-box">
+                <h3>WPM</h3>
+                <div class="value" id="final-wpm">0</div>
+                <div class="label">1分あたりの単語数</div>
+            </div>
+            <div class="result-stat-box">
+                <h3>正確率</h3>
+                <div class="value" id="accuracy">0%</div>
+                <div class="label">タイピング精度</div>
+            </div>
+        </div>
+        
+        <div id="share-section">
+            <p>友達と結果をシェアしよう！</p>
+            <button id="share-btn" class="btn">結果をコピー</button>
+        </div>
+        
+        <button id="play-again-btn" class="btn">もう一度プレイ</button>
     </div>
 
     <script>
@@ -118,6 +197,8 @@
         let timer;
         let totalTyped = 0;
         let gameActive = false;
+        let totalKeystrokes = 0;
+        let correctKeystrokes = 0;
         
         // DOM要素の参照
         const startBtn = document.getElementById('start-btn');
@@ -126,10 +207,20 @@
         const scoreElem = document.getElementById('score');
         const timeElem = document.getElementById('time');
         const wpmElem = document.getElementById('wpm');
+        const gameContainer = document.getElementById('game-container');
+        const resultContainer = document.getElementById('result-container');
+        const finalScoreElem = document.getElementById('final-score');
+        const finalWpmElem = document.getElementById('final-wpm');
+        const accuracyElem = document.getElementById('accuracy');
+        const resultMessageElem = document.getElementById('result-message');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const shareBtn = document.getElementById('share-btn');
         
         // イベントリスナーの設定
         startBtn.addEventListener('click', startGame);
         wordInput.addEventListener('input', checkInput);
+        playAgainBtn.addEventListener('click', resetGame);
+        shareBtn.addEventListener('click', shareResults);
 
         // 配列をシャッフルする関数
         function shuffleArray(array) {
@@ -159,6 +250,8 @@
             score = 0;
             timeLeft = 60;
             totalTyped = 0;
+            totalKeystrokes = 0;
+            correctKeystrokes = 0;
             gameActive = true;
             
             scoreElem.textContent = score;
@@ -209,14 +302,25 @@
         // 入力チェック関数
         function checkInput(e) {
             const userInput = e.target.value;
+            totalKeystrokes++;
             
             if (userInput === currentWord) {
+                correctKeystrokes += currentWord.length;
                 score++;
                 totalTyped += currentWord.length;
                 scoreElem.textContent = score;
                 e.target.value = '';
                 nextWord();
             } else {
+                // 正確なキーストロークをカウント
+                let correctCount = 0;
+                for (let i = 0; i < userInput.length; i++) {
+                    if (i < currentWord.length && userInput[i] === currentWord[i]) {
+                        correctCount++;
+                    }
+                }
+                correctKeystrokes = correctCount;
+                
                 // 入力中の文字をリアルタイムで色付け
                 let html = '';
                 
@@ -243,22 +347,149 @@
             clearInterval(timer);
             gameActive = false;
             
-            wordInput.disabled = true;
-            startBtn.textContent = 'ゲーム開始';
+            // 結果画面用のデータを準備
+            const finalScore = score;
+            const finalWpm = parseInt(wpmElem.textContent);
+            const accuracy = totalKeystrokes > 0 ? 
+                Math.round((correctKeystrokes / totalKeystrokes) * 100) : 0;
             
-            // 結果メッセージ
-            let message;
-            if (score > 15) {
-                message = `素晴らしい！${score}ポイント獲得しました！`;
-            } else if (score > 10) {
-                message = `良いスコアです！${score}ポイント獲得しました！`;
-            } else if (score > 5) {
-                message = `まずまずのスコアです。${score}ポイント獲得しました。`;
+            // 結果画面の要素に値をセット
+            finalScoreElem.textContent = finalScore;
+            finalWpmElem.textContent = finalWpm;
+            accuracyElem.textContent = accuracy + '%';
+            
+            // メッセージのセット
+            let message = '';
+            if (finalScore > 15) {
+                message = `素晴らしい！`;
+                startConfetti();
+            } else if (finalScore > 10) {
+                message = `良いスコアです！`;
+                startConfetti();
+            } else if (finalScore > 5) {
+                message = `まずまずのスコアです。`;
             } else {
-                message = `${score}ポイント獲得しました。もう一度チャレンジしてみましょう！`;
+                message = `次回はもっと頑張りましょう！`;
+            }
+            resultMessageElem.textContent = message;
+            
+            // ゲーム画面から結果画面に切り替え
+            gameContainer.style.display = 'none';
+            resultContainer.style.display = 'block';
+        }
+
+        // リセット関数
+        function resetGame() {
+            // 結果画面からゲーム画面に戻る
+            resultContainer.style.display = 'none';
+            gameContainer.style.display = 'block';
+            
+            // 紙吹雪を停止
+            stopConfetti();
+            
+            // ゲームをリセット
+            startBtn.textContent = 'ゲーム開始';
+            currentWordElem.textContent = '';
+            scoreElem.textContent = '0';
+            timeElem.textContent = '60';
+            wpmElem.textContent = '0';
+            
+            wordInput.value = '';
+            wordInput.disabled = true;
+        }
+
+        // 結果共有関数
+        function shareResults() {
+            const text = `タイピングゲームの結果:\n` +
+                         `スコア: ${finalScoreElem.textContent}\n` +
+                         `WPM: ${finalWpmElem.textContent}\n` +
+                         `正確率: ${accuracyElem.textContent}\n` +
+                         `#タイピングゲーム`;
+            
+            navigator.clipboard.writeText(text)
+                .then(() => {
+                    shareBtn.textContent = 'コピーしました！';
+                    setTimeout(() => {
+                        shareBtn.textContent = '結果をコピー';
+                    }, 2000);
+                })
+                .catch(err => {
+                    console.error('クリップボードへのコピーに失敗しました: ', err);
+                    alert('結果のコピーに失敗しました。');
+                });
+        }
+
+        // 紙吹雪エフェクト
+        const confettiCanvas = document.getElementById('confetti-canvas');
+        const ctx = confettiCanvas.getContext('2d');
+        let confettiAnimation;
+        const particles = [];
+        const particleCount = 150;
+        
+        // キャンバスのサイズを設定
+        function resizeCanvas() {
+            confettiCanvas.width = window.innerWidth;
+            confettiCanvas.height = window.innerHeight;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        // 紙吹雪の粒子を作成
+        function createParticle() {
+            const colors = ['#FFC8CE', '#92E9FB', '#002E4E', '#FFD700', '#FF69B4'];
+            
+            return {
+                x: Math.random() * confettiCanvas.width,
+                y: Math.random() * -confettiCanvas.height,
+                size: Math.random() * 10 + 5,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                speed: Math.random() * 3 + 2,
+                angle: Math.random() * 6.28,
+                spin: Math.random() * 0.2 - 0.1
+            };
+        }
+        
+        // 紙吹雪を描画
+        function drawConfetti() {
+            ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            
+            particles.forEach((p, index) => {
+                p.y += p.speed;
+                p.angle += p.spin;
+                
+                ctx.beginPath();
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.angle);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                ctx.restore();
+                
+                // 画面外に出た粒子を上に戻す
+                if (p.y > confettiCanvas.height) {
+                    p.y = -p.size;
+                    p.x = Math.random() * confettiCanvas.width;
+                }
+            });
+            
+            confettiAnimation = requestAnimationFrame(drawConfetti);
+        }
+        
+        function startConfetti() {
+            particles.length = 0;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(createParticle());
             }
             
-            alert(`ゲーム終了！\nスコア: ${score}\nWPM: ${wpmElem.textContent}\n\n${message}`);
+            drawConfetti();
+        }
+        
+        function stopConfetti() {
+            if (confettiAnimation) {
+                cancelAnimationFrame(confettiAnimation);
+                ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            }
         }
     </script>
 </body>
