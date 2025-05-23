@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>タイピングゲーム</title>
+    <title>商売繁盛打</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -129,7 +129,7 @@
     <canvas id="confetti-canvas"></canvas>
     
     <div id="game-container">
-        <h1>タイピングゲーム</h1>
+        <h1>商売繁盛打</h1>
         <div id="word-display">
             <span id="current-word"></span>
         </div>
@@ -400,11 +400,11 @@
 
         // 結果共有関数
         function shareResults() {
-            const text = `タイピングゲームの結果:\n` +
+            const text = `商売繁盛打の結果:\n` +
                          `スコア: ${finalScoreElem.textContent}\n` +
                          `WPM: ${finalWpmElem.textContent}\n` +
                          `正確率: ${accuracyElem.textContent}\n` +
-                         `#タイピングゲーム`;
+                         `#商売繁盛打`;
             
             navigator.clipboard.writeText(text)
                 .then(() => {
