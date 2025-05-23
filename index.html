@@ -123,6 +123,53 @@
             pointer-events: none;
             z-index: 100;
         }
+        .word-en {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .word-ja {
+            font-size: 1.5em;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        #ranking-section {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f0f8ff;
+            border-radius: 8px;
+        }
+        #name-input-section {
+            margin: 15px 0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        #player-name {
+            padding: 8px;
+            font-size: 1em;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+        .ranking-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        .ranking-table th,
+        .ranking-table td {
+            padding: 8px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        .ranking-table th {
+            background-color: #002E4E;
+            color: white;
+        }
+        .ranking-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
     </style>
 </head>
 <body>
@@ -143,10 +190,10 @@
             </div>
             <div class="stat-box">
                 <h3>時間</h3>
-                <p id="time">60</p>
+                <p id="time">30</p>
             </div>
             <div class="stat-box">
-                <h3>WPM</h3>
+                <h3>1分あたりの単語数</h3>
                 <p id="wpm">0</p>
             </div>
         </div>
@@ -154,24 +201,33 @@
     </div>
     
     <div id="result-container">
-        <h1>ゲーム結果</h1>
+        <h1>結果発表</h1>
         <div id="result-message">素晴らしい！</div>
         
         <div id="result-stats">
             <div class="result-stat-box">
                 <h3>スコア</h3>
                 <div class="value" id="final-score">0</div>
-                <div class="label">正確に入力した単語数</div>
+                <div class="label">正確に入力した文字数</div>
             </div>
             <div class="result-stat-box">
-                <h3>WPM</h3>
+                <h3>1分あたりの単語数</h3>
                 <div class="value" id="final-wpm">0</div>
-                <div class="label">1分あたりの単語数</div>
+                <div class="label">1分間に打てた単語数</div>
             </div>
             <div class="result-stat-box">
                 <h3>正確率</h3>
                 <div class="value" id="accuracy">0%</div>
                 <div class="label">タイピング精度</div>
+            </div>
+        </div>
+        
+        <div id="ranking-section">
+            <h3>ランキング</h3>
+            <div id="ranking-list"></div>
+            <div id="name-input-section">
+                <input type="text" id="player-name" placeholder="あなたの名前" maxlength="10">
+                <button id="save-score-btn" class="btn">スコアを保存</button>
             </div>
         </div>
         
@@ -186,14 +242,30 @@
     <script>
         // ゲーム用の変数
         let words = [
-            'Ruby', 'STORES', 'tanoshii', 'yatta-', 'justforfun', 'sutomaru',
-            'pos', 'cashless', 'netshop', 'omise', 'manekineko', 'okyakusann',
-            'irasshaimase', 'arigatou', 'seruhureji', 'kaiten', 'heiten',
-            'noren', 'mobairuo-da-', 'chuushoukigyou'
+            { en: 'Ruby', ja: 'Ruby' },
+            { en: 'STORES', ja: 'ストアーズ' },
+            { en: 'tanoshii', ja: '楽しい' },
+            { en: 'yatta-', ja: 'やったー' },
+            { en: 'justforfun', ja: 'Just for Fun' },
+            { en: 'sutomaru', ja: 'ストまる' },
+            { en: 'pos', ja: 'POS' },
+            { en: 'cashless', ja: 'キャッシュレス' },
+            { en: 'netshop', ja: 'ネットショップ' },
+            { en: 'omise', ja: 'お店' },
+            { en: 'manekineko', ja: '招き猫' },
+            { en: 'okyakusann', ja: 'お客さん' },
+            { en: 'irasshaimase', ja: 'いらっしゃいませ' },
+            { en: 'arigatou', ja: 'ありがとう' },
+            { en: 'seruhureji', ja: 'セルフレジ' },
+            { en: 'kaiten', ja: '開店' },
+            { en: 'heiten', ja: '閉店' },
+            { en: 'noren', ja: 'のれん' },
+            { en: 'mobairuo-da-', ja: 'モバイルオーダー' },
+            { en: 'chuushoukigyou', ja: '中小企業' }
         ];
         let currentWord = '';
         let score = 0;
-        let timeLeft = 60;
+        let timeLeft = 30;
         let timer;
         let totalTyped = 0;
         let gameActive = false;
@@ -215,12 +287,16 @@
         const resultMessageElem = document.getElementById('result-message');
         const playAgainBtn = document.getElementById('play-again-btn');
         const shareBtn = document.getElementById('share-btn');
+        const playerNameInput = document.getElementById('player-name');
+        const saveScoreBtn = document.getElementById('save-score-btn');
+        const rankingList = document.getElementById('ranking-list');
         
         // イベントリスナーの設定
         startBtn.addEventListener('click', startGame);
         wordInput.addEventListener('input', checkInput);
         playAgainBtn.addEventListener('click', resetGame);
         shareBtn.addEventListener('click', shareResults);
+        saveScoreBtn.addEventListener('click', saveScore);
 
         // 配列をシャッフルする関数
         function shuffleArray(array) {
@@ -248,7 +324,7 @@
             words = shuffleArray(words);
             
             score = 0;
-            timeLeft = 60;
+            timeLeft = 30;
             totalTyped = 0;
             totalKeystrokes = 0;
             correctKeystrokes = 0;
@@ -271,7 +347,7 @@
                 timeElem.textContent = timeLeft;
                 
                 // WPMの計算 (1分間に打った単語数)
-                const minutes = (60 - timeLeft) / 60;
+                const minutes = (30 - timeLeft) / 60;
                 if (minutes > 0) {
                     const wpm = Math.round(totalTyped / 5 / minutes); // 5文字を1語として計算
                     wpmElem.textContent = wpm;
@@ -286,17 +362,33 @@
         // 次の単語を表示する関数
         function nextWord() {
             if (words.length === 0) {
-                // すべての単語を使い切った場合は再シャッフル
+                // すべての単語を使い切った場合は元の単語リストを再シャッフル
                 words = shuffleArray([
-                    'Ruby', 'STORES', 'tanoshii', 'yatta-', 'justforfun', 'sutomaru',
-                    'pos', 'cashless', 'netshop', 'omise', 'manekineko', 'okyakusann',
-                    'irasshaimase', 'arigatou', 'seruhureji', 'kaiten', 'heiten',
-                    'noren', 'mobairuo-da-', 'chuushoukigyou'
+                    { en: 'Ruby', ja: 'Ruby' },
+                    { en: 'STORES', ja: 'ストアーズ' },
+                    { en: 'tanoshii', ja: '楽しい' },
+                    { en: 'yatta-', ja: 'やったー' },
+                    { en: 'justforfun', ja: 'Just for Fun' },
+                    { en: 'sutomaru', ja: 'ストまる' },
+                    { en: 'pos', ja: 'POS' },
+                    { en: 'cashless', ja: 'キャッシュレス' },
+                    { en: 'netshop', ja: 'ネットショップ' },
+                    { en: 'omise', ja: 'お店' },
+                    { en: 'manekineko', ja: '招き猫' },
+                    { en: 'okyakusann', ja: 'お客さん' },
+                    { en: 'irasshaimase', ja: 'いらっしゃいませ' },
+                    { en: 'arigatou', ja: 'ありがとう' },
+                    { en: 'seruhureji', ja: 'セルフレジ' },
+                    { en: 'kaiten', ja: '開店' },
+                    { en: 'heiten', ja: '閉店' },
+                    { en: 'noren', ja: 'のれん' },
+                    { en: 'mobairuo-da-', ja: 'モバイルオーダー' },
+                    { en: 'chuushoukigyou', ja: '中小企業' }
                 ]);
             }
             
             currentWord = words.pop();
-            currentWordElem.textContent = currentWord;
+            currentWordElem.innerHTML = `<div class="word-en">${currentWord.en}</div><div class="word-ja">${currentWord.ja}</div>`;
         }
 
         // 入力チェック関数
@@ -304,41 +396,42 @@
             const userInput = e.target.value;
             totalKeystrokes++;
             
-            if (userInput === currentWord) {
-                correctKeystrokes += currentWord.length;
-                score++;
-                totalTyped += currentWord.length;
+            if (userInput === currentWord.en) {
+                correctKeystrokes += currentWord.en.length;
+                score += currentWord.en.length;
+                totalTyped += currentWord.en.length;
                 scoreElem.textContent = score;
                 e.target.value = '';
                 nextWord();
             } else {
-                // 正確なキーストロークをカウント
-                let correctCount = 0;
-                for (let i = 0; i < userInput.length; i++) {
-                    if (i < currentWord.length && userInput[i] === currentWord[i]) {
-                        correctCount++;
-                    }
-                }
-                correctKeystrokes = correctCount;
-                
                 // 入力中の文字をリアルタイムで色付け
                 let html = '';
+                let correctCount = 0;
+                let incorrectCount = 0; // ミスタイプの数をカウント
                 
-                for (let i = 0; i < currentWord.length; i++) {
+                for (let i = 0; i < currentWord.en.length; i++) {
                     if (i < userInput.length) {
-                        if (userInput[i] === currentWord[i]) {
-                            html += `<span class="correct">${currentWord[i]}</span>`;
+                        if (userInput[i] === currentWord.en[i]) {
+                            html += `<span class="correct">${currentWord.en[i]}</span>`;
+                            correctCount++;
                         } else {
-                            html += `<span class="incorrect">${currentWord[i]}</span>`;
+                            html += `<span class="incorrect">${currentWord.en[i]}</span>`;
+                            incorrectCount++; // ミスタイプをカウント
                         }
                     } else if (i === userInput.length) {
-                        html += `<span class="highlight">${currentWord[i]}</span>`;
+                        html += `<span class="highlight">${currentWord.en[i]}</span>`;
                     } else {
-                        html += currentWord[i];
+                        html += currentWord.en[i];
                     }
                 }
                 
-                currentWordElem.innerHTML = html;
+                // 正しい文字のスコアを加算し、ミスタイプのペナルティを減算
+                score += correctCount - incorrectCount;
+                // スコアが0未満にならないようにする
+                score = Math.max(0, score);
+                scoreElem.textContent = score;
+                
+                currentWordElem.innerHTML = `<div class="word-en">${html}</div><div class="word-ja">${currentWord.ja}</div>`;
             }
         }
 
@@ -376,6 +469,9 @@
             // ゲーム画面から結果画面に切り替え
             gameContainer.style.display = 'none';
             resultContainer.style.display = 'block';
+            
+            // ランキング表示を更新
+            updateRankingDisplay();
         }
 
         // リセット関数
@@ -391,7 +487,7 @@
             startBtn.textContent = 'ゲーム開始';
             currentWordElem.textContent = '';
             scoreElem.textContent = '0';
-            timeElem.textContent = '60';
+            timeElem.textContent = '30';
             wpmElem.textContent = '0';
             
             wordInput.value = '';
@@ -490,6 +586,64 @@
                 cancelAnimationFrame(confettiAnimation);
                 ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
             }
+        }
+
+        // スコア保存関数
+        function saveScore() {
+            const playerName = playerNameInput.value.trim();
+            if (!playerName) {
+                alert('名前を入力してください');
+                return;
+            }
+
+            // ローカルストレージからランキングを取得
+            let rankings = JSON.parse(localStorage.getItem('typingRankings') || '[]');
+            
+            // 新しいスコアを追加
+            rankings.push({
+                name: playerName,
+                score: score,
+                wpm: parseInt(wpmElem.textContent),
+                accuracy: accuracyElem.textContent,
+                date: new Date().toLocaleDateString()
+            });
+
+            // スコアでソート
+            rankings.sort((a, b) => b.score - a.score);
+
+            // 上位10件のみ保存
+            rankings = rankings.slice(0, 10);
+
+            // ローカルストレージに保存
+            localStorage.setItem('typingRankings', JSON.stringify(rankings));
+
+            // ランキング表示を更新
+            updateRankingDisplay();
+            
+            // 入力欄をクリア
+            playerNameInput.value = '';
+        }
+
+        // ランキング表示更新関数
+        function updateRankingDisplay() {
+            const rankings = JSON.parse(localStorage.getItem('typingRankings') || '[]');
+            
+            let html = '<table class="ranking-table">';
+            html += '<tr><th>順位</th><th>名前</th><th>スコア</th><th>1分あたりの単語数</th><th>正確率</th><th>日付</th></tr>';
+            
+            rankings.forEach((rank, index) => {
+                html += `<tr>
+                    <td>${index + 1}</td>
+                    <td>${rank.name}</td>
+                    <td>${rank.score}</td>
+                    <td>${rank.wpm}</td>
+                    <td>${rank.accuracy}</td>
+                    <td>${rank.date}</td>
+                </tr>`;
+            });
+            
+            html += '</table>';
+            rankingList.innerHTML = html;
         }
     </script>
 </body>
